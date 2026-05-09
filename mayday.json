@@ -1,0 +1,104 @@
+{
+  "id": "cutting-board-evil-twin",
+  "name": "Cutting Board Evil Twin",
+  "version": "1.0.0",
+  "description": "Arrangement-style autocut: silence pass + take detection + refine, applied to an in/out range. Always operates on a duplicated sequence.",
+  "author": "Trevor May",
+  "main": "src/index.ts",
+  "repository": "IamTrevorMay/mayday-cutting-board-evil-twin",
+  "minSdkVersion": "2.0.0",
+  "hasCep": true,
+  "dependencies": ["silence-remover"],
+  "ui": {
+    "page": true,
+    "sidebarLabel": "Evil Twin",
+    "sidebarOrder": 52
+  },
+  "marketplace": {
+    "category": "editing",
+    "tags": ["cuts", "autocut", "transcript", "takes", "silence"]
+  },
+  "targetApp": "premiere",
+  "commands": [
+    {
+      "id": "run",
+      "name": "Run Evil Twin",
+      "description": "Run the full pipeline (silence + take detection + refine) on the active sequence's in/out range. Always duplicates the sequence first."
+    },
+    {
+      "id": "transcribe",
+      "name": "Transcribe Range",
+      "description": "Transcribe the active sequence's in/out range using the configured transcript source",
+      "hidden": true
+    },
+    {
+      "id": "silence-pass",
+      "name": "Silence Pass Only",
+      "description": "Run only step 1 (call into Silence Remover plugin) on the duplicated sequence",
+      "hidden": true
+    },
+    {
+      "id": "detect-takes",
+      "name": "Detect Takes Only",
+      "description": "Run only step 2 (heuristic + LLM tiebreak) and return cut candidates without applying",
+      "hidden": true
+    },
+    {
+      "id": "apply-take-cuts",
+      "name": "Apply Take Cuts",
+      "description": "Apply user-approved take cuts to the duplicated sequence",
+      "hidden": true
+    },
+    {
+      "id": "refine-cuts",
+      "name": "Refine Cuts Only",
+      "description": "Run only step 3 (normalize all cut boundaries to standard pre-roll/ramp)",
+      "hidden": true
+    }
+  ],
+  "permissions": ["timeline", "media", "ai", "filesystem", "network"],
+  "config": {
+    "transcriptSource": {
+      "type": "string",
+      "label": "Transcript Source",
+      "default": "auto",
+      "description": "auto = use Premiere built-in if available, otherwise Whisper. Or set to 'whisper' / 'premiere' to force one."
+    },
+    "anthropicApiKey": {
+      "type": "string",
+      "label": "Anthropic API Key",
+      "default": "",
+      "description": "Used for LLM tiebreak on ambiguous take clusters. Leave empty to disable LLM tiebreak (heuristic-only)."
+    },
+    "requireTakeApproval": {
+      "type": "boolean",
+      "label": "Require approval before cutting takes",
+      "default": true,
+      "description": "If true, show the strikethrough transcript review before applying take cuts. If false, auto-apply."
+    },
+    "preRollMs": {
+      "type": "number",
+      "label": "Pre-roll (ms)",
+      "default": 200,
+      "description": "Step 3 — milliseconds of audio to leave before each cut-in point"
+    },
+    "postRollMs": {
+      "type": "number",
+      "label": "Post-roll (ms)",
+      "default": 200,
+      "description": "Step 3 — milliseconds of audio to leave after each cut-out point"
+    },
+    "rampThresholdDb": {
+      "type": "number",
+      "label": "Ramp threshold (dB)",
+      "default": -40,
+      "description": "Step 3 — audio level a cut-in must reach for the boundary to count"
+    },
+    "heuristicConfidenceCutoff": {
+      "type": "number",
+      "label": "Heuristic confidence cutoff",
+      "default": 0.75,
+      "description": "Step 2 — heuristic scores below this go to the LLM tiebreak (if API key set)"
+    }
+  }
+}

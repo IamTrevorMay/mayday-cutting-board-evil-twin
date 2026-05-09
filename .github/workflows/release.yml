@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Package plugin
+        run: node package.js
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Read manifest
+        id: manifest
+        run: |
+          echo "name=$(jq -r .name mayday.json)" >> $GITHUB_OUTPUT
+          echo "id=$(jq -r .id mayday.json)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mayday-${{ steps.manifest.outputs.id }}-v${{ steps.version.outputs.version }}.zip
+          name: ${{ steps.manifest.outputs.name }} v${{ steps.version.outputs.version }}
+          generate_release_notes: true

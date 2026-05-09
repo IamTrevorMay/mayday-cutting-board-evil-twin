@@ -1,0 +1,13 @@
+{
+  "name": "mayday-cutting-board-evil-twin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Arrangement-style autocut workflow: silence + take detection + refine, applied to an in/out range",
+  "scripts": {
+    "build": "node build.js",
+    "package": "node build.js && node package.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  }
+}
