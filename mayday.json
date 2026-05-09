@@ -54,6 +54,12 @@
       "name": "Refine Cuts Only",
       "description": "Run only step 3 (normalize all cut boundaries to standard pre-roll/ramp)",
       "hidden": true
+    },
+    {
+      "id": "duplicate-and-clear-range",
+      "name": "Validate: Duplicate + Range Delete",
+      "description": "Step 4 validation harness — duplicates the active sequence and ripple-deletes a [startSeconds, endSeconds] range on the duplicate",
+      "hidden": true
     }
   ],
   "permissions": ["timeline", "media", "ai", "filesystem", "network"],
