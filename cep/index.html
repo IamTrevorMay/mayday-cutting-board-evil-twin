@@ -4,12 +4,11 @@
   <meta charset="UTF-8" />
   <title>Cutting Board Evil Twin</title>
   <style>
-    :root {
-      color-scheme: dark;
-    }
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 16px;
+      padding: 14px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 13px;
       background: #1e1e1e;
@@ -22,31 +21,194 @@
     }
     .subtitle {
       color: #888;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
+      font-size: 11px;
     }
-    .stub {
-      padding: 12px;
-      background: #2a2a2a;
+    .test {
+      background: #262626;
       border: 1px solid #333;
-      border-radius: 4px;
-      color: #aaa;
-      line-height: 1.5;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 12px;
     }
-    code {
-      background: #111;
-      padding: 1px 5px;
+    .test-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #e0e0e0;
+    }
+    .test-desc {
+      color: #999;
+      font-size: 11px;
+      margin-bottom: 10px;
+      line-height: 1.45;
+    }
+    .row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+    .row label {
+      flex: 0 0 80px;
+      color: #aaa;
+      font-size: 11px;
+    }
+    input[type=text], input[type=number] {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      color: #e0e0e0;
+      padding: 5px 7px;
       border-radius: 3px;
       font-size: 12px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    input:focus { outline: none; border-color: #5a8fd6; }
+    button {
+      background: #2d5fa8;
+      color: #fff;
+      border: none;
+      padding: 7px 14px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover { background: #3870c2; }
+    button:disabled { background: #444; cursor: not-allowed; opacity: 0.6; }
+    .result {
+      margin-top: 8px;
+      padding: 8px;
+      background: #111;
+      border-radius: 3px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 200px;
+      overflow-y: auto;
+      color: #c0c0c0;
+    }
+    .result.ok { border-left: 3px solid #4caf50; }
+    .result.fail { border-left: 3px solid #f44336; color: #f8a8a8; }
+    .result.pending { border-left: 3px solid #ff9800; color: #ffd97e; }
+    .hint {
+      color: #777;
+      font-size: 10px;
+      margin-top: 6px;
+      font-style: italic;
     }
   </style>
 </head>
 <body>
   <h1>Cutting Board Evil Twin</h1>
-  <div class="subtitle">Arrangement workflow — v1.0.0 (scaffold)</div>
-  <div class="stub">
-    Panel UI not built yet. This is the scaffold from build step 1.
-    <br /><br />
-    Next: <code>step 2</code> — silence-remover IPC bridge validation.
+  <div class="subtitle">Build steps 2-4 validation harness</div>
+
+  <!-- TEST 1: Step 2 — Silence Remover IPC bridge -->
+  <div class="test">
+    <div class="test-title">Test 1 — Silence Remover bridge (Step 2 gate)</div>
+    <div class="test-desc">
+      Tells Evil Twin to call into the Silence Remover plugin and asks it to analyze whatever's
+      in the active sequence. Pass = a list of silent regions comes back.
+    </div>
+    <button id="btn-step2">Run Test 1</button>
+    <div class="result" id="result-step2" style="display:none"></div>
+    <div class="hint">Requires: Silence Remover plugin installed + active sequence with audio.</div>
   </div>
+
+  <!-- TEST 2: Step 3 — Transcript adapter -->
+  <div class="test">
+    <div class="test-title">Test 2 — Transcribe a file (Step 3)</div>
+    <div class="test-desc">
+      Asks the SDK to transcribe an audio/video file with whisper. Pass = segments with timestamps
+      come back. Use a short clip (under a minute) for a fast test.
+    </div>
+    <div class="row">
+      <label>File path:</label>
+      <input type="text" id="step3-path" placeholder="/Users/you/path/to/audio.wav" />
+    </div>
+    <button id="btn-step3">Run Test 2</button>
+    <div class="result" id="result-step3" style="display:none"></div>
+    <div class="hint">Requires: whisper-cli on PATH and ggml-base.en.bin model installed.</div>
+  </div>
+
+  <!-- TEST 3: Step 4 — Duplicate + range delete (CRITICAL) -->
+  <div class="test">
+    <div class="test-title">Test 3 — Duplicate + range ripple delete (Step 4 gate, CRITICAL)</div>
+    <div class="test-desc">
+      Duplicates the active sequence then ripple-deletes a chosen range across all tracks on the
+      duplicate. Open the duplicate after — clips after the range should have shifted back by
+      exactly (end - start) seconds with audio still in sync with video.
+    </div>
+    <div class="row">
+      <label>Start (s):</label>
+      <input type="number" id="step4-start" value="5" step="0.1" />
+    </div>
+    <div class="row">
+      <label>End (s):</label>
+      <input type="number" id="step4-end" value="10" step="0.1" />
+    </div>
+    <button id="btn-step4">Run Test 3</button>
+    <div class="result" id="result-step4" style="display:none"></div>
+    <div class="hint">Click the Premiere Timeline panel first so it has focus, then run.</div>
+  </div>
+
+  <script>
+    var API = 'http://localhost:9876/api/plugins/cutting-board-evil-twin/command';
+
+    function showResult(id, data, status) {
+      var el = document.getElementById(id);
+      el.style.display = 'block';
+      el.className = 'result ' + status;
+      el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    }
+
+    async function runCommand(commandId, args, resultId) {
+      var btn = event && event.target ? event.target : null;
+      if (btn) btn.disabled = true;
+      showResult(resultId, 'Running...', 'pending');
+      try {
+        var res = await fetch(API + '/' + commandId, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(args || {}),
+        });
+        var json = await res.json();
+        if (json.success) {
+          showResult(resultId, json.result, 'ok');
+        } else {
+          showResult(resultId, 'ERROR: ' + (json.error || 'unknown'), 'fail');
+        }
+      } catch (err) {
+        showResult(resultId, 'NETWORK ERROR: ' + err.message + '\n\nIs the launcher running?', 'fail');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    document.getElementById('btn-step2').addEventListener('click', function() {
+      runCommand('silence-pass', {}, 'result-step2');
+    });
+
+    document.getElementById('btn-step3').addEventListener('click', function() {
+      var path = document.getElementById('step3-path').value.trim();
+      if (!path) {
+        showResult('result-step3', 'Enter a file path first.', 'fail');
+        return;
+      }
+      runCommand('transcribe', { filePath: path }, 'result-step3');
+    });
+
+    document.getElementById('btn-step4').addEventListener('click', function() {
+      var start = parseFloat(document.getElementById('step4-start').value);
+      var end = parseFloat(document.getElementById('step4-end').value);
+      if (!isFinite(start) || !isFinite(end) || end <= start) {
+        showResult('result-step4', 'Need numeric start and end with end > start.', 'fail');
+        return;
+      }
+      runCommand('duplicate-and-clear-range', { startSeconds: start, endSeconds: end }, 'result-step4');
+    });
+  </script>
 </body>
 </html>
