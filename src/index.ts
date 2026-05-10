@@ -1,5 +1,6 @@
 import { definePlugin } from '@mayday/sdk';
-import type { PluginContext, SilentRegion, TranscriptionResult, RippleDeleteRangeResult, DuplicateSequenceResult } from '@mayday/sdk';
+import type { PluginContext, SilentRegion, TranscriptionResult, RippleDeleteRangeResult, DuplicateSequenceResult, TranscriptSegment } from '@mayday/sdk';
+import { detectTakes, SAMPLE_TRANSCRIPT, type TakeDetectorOptions } from './take-detector.js';
 
 interface EvilTwinConfig {
   transcriptSource: 'auto' | 'whisper' | 'premiere';
@@ -84,8 +85,36 @@ export default definePlugin({
       }
     },
 
-    async 'detect-takes'(_ctx: PluginContext, _args?: Record<string, unknown>) {
-      throw new Error(NOT_IMPL);
+    /**
+     * STEP 5 — heuristic take detector.
+     * Args: { segments?: TranscriptSegment[]; useSample?: boolean; prefixWords?: number; maxGapSeconds?: number; minConfidence?: number }
+     * Returns the detected take groups + flat list of cut candidates.
+     * If `useSample: true` (or no segments provided), runs against the built-in
+     * sample transcript so the algorithm can be exercised without whisper.
+     */
+    async 'detect-takes'(ctx: PluginContext, args?: Record<string, unknown>) {
+      const useSample = Boolean(args?.useSample) || !args?.segments;
+      const segments: TranscriptSegment[] = useSample
+        ? SAMPLE_TRANSCRIPT
+        : (args!.segments as TranscriptSegment[]);
+
+      const options: TakeDetectorOptions = {
+        prefixWords: typeof args?.prefixWords === 'number' ? args!.prefixWords as number : undefined,
+        maxGapSeconds: typeof args?.maxGapSeconds === 'number' ? args!.maxGapSeconds as number : undefined,
+        minConfidence: typeof args?.minConfidence === 'number' ? args!.minConfidence as number : undefined,
+      };
+
+      ctx.log.info(`[step5] detect-takes on ${segments.length} segments (sample=${useSample})`);
+      const result = detectTakes(segments, options);
+      ctx.log.info(`[step5] found ${result.groups.length} take group(s), ${result.candidates.length} cut candidate(s)`);
+
+      return {
+        usedSample: useSample,
+        segmentCount: result.segmentCount,
+        groupCount: result.groups.length,
+        candidateCount: result.candidates.length,
+        groups: result.groups,
+      };
     },
 
     async 'apply-take-cuts'(_ctx: PluginContext, _args?: Record<string, unknown>) {
@@ -122,17 +151,19 @@ export default definePlugin({
       ctx.log.info(`[step4-validate] duplicated: ${dup.originalName} → ${dup.backupName}`);
 
       ctx.log.info(`[step4-validate] ripple-deleting range [${startSeconds}, ${endSeconds}] on the duplicate...`);
-      const deleted: RippleDeleteRangeResult | null = await ctx.services.timeline.rippleDeleteRange(startSeconds, endSeconds);
-      if (!deleted) {
+      const deleted: RippleDeleteRangeResult = await ctx.services.timeline.rippleDeleteRange(startSeconds, endSeconds);
+
+      if (!deleted || !deleted.ok) {
+        ctx.log.warn('[step4-validate] FAILED:', deleted);
         return {
           gate: 'step4-duplicate-and-range-delete',
           ok: false,
           duplicate: dup,
-          error: 'rippleDeleteRange returned null — Timeline panel may not have focus, or no active sequence',
+          diagnostic: deleted,
         };
       }
 
-      ctx.log.info(`[step4-validate] removed ${deleted.durationRemoved.toFixed(3)}s from duplicate`);
+      ctx.log.info(`[step4-validate] removed ${deleted.durationRemoved.toFixed(3)}s from duplicate (actualIn=${deleted.actualIn}, actualOut=${deleted.actualOut})`);
       return {
         gate: 'step4-duplicate-and-range-delete',
         ok: true,

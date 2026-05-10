@@ -133,6 +133,19 @@
     <div class="hint">Requires: whisper-cli on PATH and ggml-base.en.bin model installed.</div>
   </div>
 
+  <!-- TEST 4: Step 5 — Heuristic take detector (the cool part) -->
+  <div class="test">
+    <div class="test-title">Test 4 — Take detector (Step 5, the actual idea)</div>
+    <div class="test-desc">
+      Runs the heuristic against a built-in sample transcript with deliberate restarts.
+      The sample includes 13 segments where the speaker re-starts a few times. Pass = the
+      algorithm groups the restarts together and identifies which take to keep vs. cut.
+    </div>
+    <button id="btn-step5">Run Test 4 (sample transcript)</button>
+    <div class="result" id="result-step5" style="display:none"></div>
+    <div class="hint">No Premiere needed for this one — pure algorithm test.</div>
+  </div>
+
   <!-- TEST 3: Step 4 — Duplicate + range delete (CRITICAL) -->
   <div class="test">
     <div class="test-title">Test 3 — Duplicate + range ripple delete (Step 4 gate, CRITICAL)</div>
@@ -198,6 +211,10 @@
         return;
       }
       runCommand('transcribe', { filePath: path }, 'result-step3');
+    });
+
+    document.getElementById('btn-step5').addEventListener('click', function() {
+      runCommand('detect-takes', { useSample: true }, 'result-step5');
     });
 
     document.getElementById('btn-step4').addEventListener('click', function() {

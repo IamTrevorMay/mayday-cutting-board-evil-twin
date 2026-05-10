@@ -24,11 +24,9 @@ export interface SilentRegion {
   duration: number;
 }
 
-export interface RippleDeleteRangeResult {
-  rangeStart: number;
-  rangeEnd: number;
-  durationRemoved: number;
-}
+export type RippleDeleteRangeResult =
+  | { ok: true; rangeStart: number; rangeEnd: number; durationRemoved: number; actualIn?: string; actualOut?: string }
+  | { ok: false; stage: string; [k: string]: unknown };
 
 export interface DuplicateSequenceResult {
   originalName: string;
@@ -43,7 +41,7 @@ export interface MediaServiceAPI {
 export interface TimelineServiceAPI {
   getActiveSequence(): Promise<{ name: string; duration: number; inPoint: number; outPoint: number } | null>;
   duplicateSequence(): Promise<DuplicateSequenceResult | null>;
-  rippleDeleteRange(startSeconds: number, endSeconds: number): Promise<RippleDeleteRangeResult | null>;
+  rippleDeleteRange(startSeconds: number, endSeconds: number): Promise<RippleDeleteRangeResult>;
 }
 
 export interface PluginContext {
