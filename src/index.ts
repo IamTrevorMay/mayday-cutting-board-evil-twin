@@ -106,13 +106,25 @@ export default definePlugin({
 
       ctx.log.info(`[step5] detect-takes on ${segments.length} segments (sample=${useSample})`);
       const result = detectTakes(segments, options);
-      ctx.log.info(`[step5] found ${result.groups.length} take group(s), ${result.candidates.length} cut candidate(s)`);
+      ctx.log.info(`[step5] found ${result.groups.length} take group(s), ${result.candidates.length} draft segment(s)`);
+
+      // Lift "actionable" data to the top — the cut ranges are what feed
+      // ripple-delete. Drafts + segmentsInRange are kept inside groups for
+      // the review UI.
+      const cutRanges = result.groups.map((g) => ({
+        startSeconds: g.cutRangeStart,
+        endSeconds: g.cutRangeEnd,
+        durationSeconds: g.cutRangeEnd - g.cutRangeStart,
+        keepStartingAt: g.finalTakeStart,
+        keepText: g.finalTakeText,
+        segmentsCutCount: g.segmentsInRange.length,
+      }));
 
       return {
         usedSample: useSample,
         segmentCount: result.segmentCount,
         groupCount: result.groups.length,
-        candidateCount: result.candidates.length,
+        cutRanges,
         groups: result.groups,
       };
     },

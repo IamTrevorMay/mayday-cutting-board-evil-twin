@@ -40,7 +40,18 @@ export interface TakeGroup {
   finalTakeIndex: number;
   finalTakeStart: number;
   finalTakeText: string;
+  /**
+   * Time range to ripple-delete. Spans from the earliest draft in the group
+   * up to (but not including) the start of the final take. Includes any
+   * non-matching segments in between — asides, false starts, "let me start
+   * over" filler — because they're all part of the discarded attempts.
+   */
+  cutRangeStart: number;
+  cutRangeEnd: number;
+  /** Individual segments that triggered the match (for review UI highlighting). */
   drafts: TakeCutCandidate[];
+  /** All segments swept up by the cut range (includes drafts + intervening asides). */
+  segmentsInRange: TranscriptSegment[];
 }
 
 export interface TakeDetectionResult {
@@ -216,11 +227,22 @@ export function detectTakes(
   const groups: TakeGroup[] = [];
   for (const [finalIdx, drafts] of groupsByFinal) {
     drafts.sort((a, b) => a.cutStart - b.cutStart);
+    // The cut range spans from the earliest draft's start to the final take's start.
+    // Everything in between gets swept (asides, "let me start over" filler, etc.)
+    // because they're part of the discarded attempts.
+    const cutRangeStart = drafts[0].cutStart;
+    const cutRangeEnd = segments[finalIdx].start;
+    const segmentsInRange = segments.filter(
+      (s) => s.start >= cutRangeStart && s.start < cutRangeEnd,
+    );
     groups.push({
       finalTakeIndex: finalIdx,
       finalTakeStart: segments[finalIdx].start,
       finalTakeText: segments[finalIdx].text,
+      cutRangeStart,
+      cutRangeEnd,
       drafts,
+      segmentsInRange,
     });
   }
   groups.sort((a, b) => a.finalTakeStart - b.finalTakeStart);
