@@ -86,6 +86,45 @@ export default definePlugin({
     },
 
     /**
+     * Convenience: transcribe a file then run take detection on the result.
+     * Args: { filePath: string; language?: string; prefixWords?: number; maxGapSeconds?: number; minConfidence?: number }
+     * Returns the transcript + the detected cut ranges in one round trip.
+     */
+    async 'transcribe-and-detect'(ctx: PluginContext, args?: Record<string, unknown>) {
+      const filePath = String(args?.filePath ?? '');
+      if (!filePath) throw new Error('transcribe-and-detect: required arg "filePath" missing');
+      const language = (args?.language as string | undefined) ?? 'en';
+
+      ctx.log.info(`[transcribe-and-detect] transcribing ${filePath}`);
+      const transcript: TranscriptionResult = await ctx.services.media.transcribe(filePath, { language });
+      ctx.log.info(`[transcribe-and-detect] got ${transcript.segments.length} segments, running detector`);
+
+      const options: TakeDetectorOptions = {
+        prefixWords: typeof args?.prefixWords === 'number' ? args!.prefixWords as number : undefined,
+        maxGapSeconds: typeof args?.maxGapSeconds === 'number' ? args!.maxGapSeconds as number : undefined,
+        minConfidence: typeof args?.minConfidence === 'number' ? args!.minConfidence as number : undefined,
+      };
+      const result = detectTakes(transcript.segments, options);
+      ctx.log.info(`[transcribe-and-detect] detected ${result.groups.length} take group(s)`);
+
+      return {
+        filePath,
+        language: transcript.language,
+        segmentCount: transcript.segments.length,
+        fullTextPreview: transcript.fullText.slice(0, 300),
+        cutRanges: result.groups.map((g) => ({
+          startSeconds: g.cutRangeStart,
+          endSeconds: g.cutRangeEnd,
+          durationSeconds: g.cutRangeEnd - g.cutRangeStart,
+          keepStartingAt: g.finalTakeStart,
+          keepText: g.finalTakeText,
+          segmentsCutCount: g.segmentsInRange.length,
+          draftsPreview: g.segmentsInRange.map((s) => s.text),
+        })),
+      };
+    },
+
+    /**
      * STEP 5 — heuristic take detector.
      * Args: { segments?: TranscriptSegment[]; useSample?: boolean; prefixWords?: number; maxGapSeconds?: number; minConfidence?: number }
      * Returns the detected take groups + flat list of cut candidates.

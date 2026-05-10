@@ -133,6 +133,24 @@
     <div class="hint">Requires: whisper-cli on PATH and ggml-base.en.bin model installed.</div>
   </div>
 
+  <!-- TEST 5: real-audio end-to-end -->
+  <div class="test">
+    <div class="test-title">Test 5 — Real audio: transcribe + detect takes</div>
+    <div class="test-desc">
+      Pipes a real audio/video file through whisper, then runs the take detector
+      on the transcript. Use a recording where you (or someone) restarts a
+      sentence at least once — the detector won't have anything to find on a
+      clean read. Long files take a while; under 2 minutes is comfortable.
+    </div>
+    <div class="row">
+      <label>File path:</label>
+      <input type="text" id="step5b-path" placeholder="/Users/you/path/to/recording.m4a" />
+    </div>
+    <button id="btn-step5b">Run Test 5</button>
+    <div class="result" id="result-step5b" style="display:none"></div>
+    <div class="hint">Result shows each cut range with the text being cut, so you can sanity-check.</div>
+  </div>
+
   <!-- TEST 4: Step 5 — Heuristic take detector (the cool part) -->
   <div class="test">
     <div class="test-title">Test 4 — Take detector (Step 5, the actual idea)</div>
@@ -215,6 +233,15 @@
 
     document.getElementById('btn-step5').addEventListener('click', function() {
       runCommand('detect-takes', { useSample: true }, 'result-step5');
+    });
+
+    document.getElementById('btn-step5b').addEventListener('click', function() {
+      var path = document.getElementById('step5b-path').value.trim();
+      if (!path) {
+        showResult('result-step5b', 'Enter a file path first.', 'fail');
+        return;
+      }
+      runCommand('transcribe-and-detect', { filePath: path }, 'result-step5b');
     });
 
     document.getElementById('btn-step4').addEventListener('click', function() {

@@ -60,6 +60,12 @@
       "name": "Validate: Duplicate + Range Delete",
       "description": "Step 4 validation harness — duplicates the active sequence and ripple-deletes a [startSeconds, endSeconds] range on the duplicate",
       "hidden": true
+    },
+    {
+      "id": "transcribe-and-detect",
+      "name": "Transcribe + Detect Takes",
+      "description": "Convenience: transcribe a file with whisper then run the take detector. Returns cut ranges ready for ripple-delete.",
+      "hidden": true
     }
   ],
   "permissions": ["timeline", "media", "ai", "filesystem", "network"],
