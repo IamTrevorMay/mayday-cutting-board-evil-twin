@@ -66,6 +66,12 @@
       "name": "Transcribe + Detect Takes",
       "description": "Convenience: transcribe a file with whisper then run the take detector. Returns cut ranges ready for ripple-delete.",
       "hidden": true
+    },
+    {
+      "id": "debug-preprocess",
+      "name": "Debug: Preprocess",
+      "description": "Returns the transcribed segments before and after splitOnInternalRestarts, for debugging the detector",
+      "hidden": true
     }
   ],
   "permissions": ["timeline", "media", "ai", "filesystem", "network"],

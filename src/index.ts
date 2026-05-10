@@ -1,6 +1,6 @@
 import { definePlugin } from '@mayday/sdk';
 import type { PluginContext, SilentRegion, TranscriptionResult, RippleDeleteRangeResult, DuplicateSequenceResult, TranscriptSegment } from '@mayday/sdk';
-import { detectTakes, SAMPLE_TRANSCRIPT, type TakeDetectorOptions } from './take-detector.js';
+import { detectTakes, splitOnInternalRestarts, SAMPLE_TRANSCRIPT, type TakeDetectorOptions } from './take-detector.js';
 
 interface EvilTwinConfig {
   transcriptSource: 'auto' | 'whisper' | 'premiere';
@@ -86,6 +86,24 @@ export default definePlugin({
     },
 
     /**
+     * Debug helper: transcribe a file, run the preprocessor, return the
+     * segments before AND after splitting so we can see what the detector
+     * actually sees.
+     */
+    async 'debug-preprocess'(ctx: PluginContext, args?: Record<string, unknown>) {
+      const filePath = String(args?.filePath ?? '');
+      if (!filePath) throw new Error('debug-preprocess: required arg "filePath" missing');
+      const transcript = await ctx.services.media.transcribe(filePath, { language: 'en' });
+      const split = splitOnInternalRestarts(transcript.segments, 4, 30);
+      return {
+        original: transcript.segments,
+        afterSplit: split,
+        originalCount: transcript.segments.length,
+        afterSplitCount: split.length,
+      };
+    },
+
+    /**
      * Convenience: transcribe a file then run take detection on the result.
      * Args: { filePath: string; language?: string; prefixWords?: number; maxGapSeconds?: number; minConfidence?: number }
      * Returns the transcript + the detected cut ranges in one round trip.
@@ -107,20 +125,35 @@ export default definePlugin({
       const result = detectTakes(transcript.segments, options);
       ctx.log.info(`[transcribe-and-detect] detected ${result.groups.length} take group(s)`);
 
+      // Build keepPreview by joining ORIGINAL transcript segments that overlap
+      // the kept-content window — gives a faithful "what's left after the cut"
+      // view even when the detector's preprocessor split things up.
+      const cutRanges = result.groups.map((g, idx) => {
+        const nextCutStart = idx + 1 < result.groups.length ? result.groups[idx + 1].cutRangeStart : Infinity;
+        const keptOriginalSegments = transcript.segments.filter(
+          (s) => s.start >= g.cutRangeEnd - 0.05 && s.start < nextCutStart,
+        );
+        const keepPreview = keptOriginalSegments
+          .map((s) => s.text)
+          .join(' ')
+          .slice(0, 250);
+        return {
+          startSeconds: g.cutRangeStart,
+          endSeconds: g.cutRangeEnd,
+          durationSeconds: g.cutRangeEnd - g.cutRangeStart,
+          keepStartingAt: g.finalTakeStart,
+          keepPreview,
+          cutPreview: g.segmentsInRange.map((s) => s.text).join(' ').slice(0, 250),
+          segmentsCutCount: g.segmentsInRange.length,
+        };
+      });
+
       return {
         filePath,
         language: transcript.language,
         segmentCount: transcript.segments.length,
         fullTextPreview: transcript.fullText.slice(0, 300),
-        cutRanges: result.groups.map((g) => ({
-          startSeconds: g.cutRangeStart,
-          endSeconds: g.cutRangeEnd,
-          durationSeconds: g.cutRangeEnd - g.cutRangeStart,
-          keepStartingAt: g.finalTakeStart,
-          keepText: g.finalTakeText,
-          segmentsCutCount: g.segmentsInRange.length,
-          draftsPreview: g.segmentsInRange.map((s) => s.text),
-        })),
+        cutRanges,
       };
     },
 

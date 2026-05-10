@@ -159,6 +159,142 @@ function scoreRestart(prefA: string[], prefB: string[]): { confidence: number; r
   return null;
 }
 
+/**
+ * Pre-processor: splits segments at internal restart points.
+ *
+ * Whisper often packs multiple takes into a single audio-energy-based
+ * segment ("Hey guys welcome to the channel my name is trip hey guys
+ * welcome to the channel my name is Trevor"). The base detector compares
+ * BETWEEN segments, so it can't see those internal restarts.
+ *
+ * This pass concatenates all words into a stream with estimated
+ * per-word timestamps, finds N-gram phrases (default 4+ words) that
+ * repeat within maxGap seconds, and inserts segment boundaries at every
+ * occurrence. The downstream detector then sees the takes as separate
+ * segments and groups them normally.
+ */
+export function splitOnInternalRestarts(
+  segments: TranscriptSegment[],
+  minPhraseLen = 4,
+  maxGapSeconds = 30,
+): TranscriptSegment[] {
+  if (segments.length === 0) return segments;
+
+  // Word stream with estimated per-word timestamps and back-references
+  type W = { text: string; time: number; segIdx: number; tokIdx: number };
+  const stream: W[] = [];
+  const segTokenCounts: number[] = [];
+  for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+    const seg = segments[segIdx];
+    const toks = tokenize(seg.text);
+    segTokenCounts.push(toks.length);
+    const dur = Math.max(seg.end - seg.start, 0.001);
+    for (let tokIdx = 0; tokIdx < toks.length; tokIdx++) {
+      const time = seg.start + (tokIdx / Math.max(toks.length, 1)) * dur;
+      stream.push({ text: toks[tokIdx], time, segIdx, tokIdx });
+    }
+  }
+
+  // Index N-gram phrases → list of stream positions
+  const phraseAt = new Map<string, number[]>();
+  for (let i = 0; i + minPhraseLen <= stream.length; i++) {
+    const phrase = stream.slice(i, i + minPhraseLen).map((w) => w.text).join(' ');
+    let list = phraseAt.get(phrase);
+    if (!list) {
+      list = [];
+      phraseAt.set(phrase, list);
+    }
+    list.push(i);
+  }
+
+  // Collect stream positions that are take starts.
+  // We need EVERY occurrence of a repeated phrase to become a segment
+  // boundary — including the LAST one (the keeper's start), so the
+  // downstream prefix detector can see the keeper as the start of its own
+  // segment instead of buried inside the previous take's tail.
+  const restartPositions = new Set<number>();
+  for (const positions of phraseAt.values()) {
+    if (positions.length < 2) continue;
+    // A cluster is valid if at least two occurrences fall within maxGap of each other
+    for (let i = 0; i < positions.length; i++) {
+      let inCluster = false;
+      for (let j = 0; j < positions.length; j++) {
+        if (i === j) continue;
+        if (Math.abs(stream[positions[i]].time - stream[positions[j]].time) <= maxGapSeconds) {
+          inCluster = true;
+          break;
+        }
+      }
+      if (inCluster) restartPositions.add(positions[i]);
+    }
+  }
+
+  if (restartPositions.size === 0) return segments;
+
+  // Dedup consecutive runs: each repeated phrase produces a run of consecutive
+  // marked positions (one per overlapping 4-gram window). Only the FIRST
+  // position in each run is the actual take boundary — keep that, drop the rest.
+  const sortedPositions = [...restartPositions].sort((a, b) => a - b);
+  const dedupedPositions: number[] = [];
+  let lastAdded = -2;
+  for (const p of sortedPositions) {
+    if (p - lastAdded > 1) {
+      dedupedPositions.push(p);
+    }
+    lastAdded = p;
+  }
+
+  // For each segment, find restart positions falling inside it (excluding position 0
+  // of the first segment, which would create an empty leading sub-segment)
+  type Cut = { tokIdx: number; time: number };
+  const cutsPerSeg = new Map<number, Cut[]>();
+  for (const pos of dedupedPositions) {
+    const w = stream[pos];
+    if (w.tokIdx === 0) continue; // splitting at the very start of a segment is a no-op
+    const list = cutsPerSeg.get(w.segIdx) ?? [];
+    list.push({ tokIdx: w.tokIdx, time: w.time });
+    cutsPerSeg.set(w.segIdx, list);
+  }
+
+  if (cutsPerSeg.size === 0) return segments;
+
+  // Build new segments: walk each original, splitting at the cut points
+  const newSegs: TranscriptSegment[] = [];
+  for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+    const seg = segments[segIdx];
+    const cuts = cutsPerSeg.get(segIdx);
+    if (!cuts || cuts.length === 0) {
+      newSegs.push(seg);
+      continue;
+    }
+    cuts.sort((a, b) => a.tokIdx - b.tokIdx);
+    const tokens = tokenize(seg.text);
+    const dur = Math.max(seg.end - seg.start, 0.001);
+
+    let prevTok = 0;
+    let prevTime = seg.start;
+    for (const cut of cuts) {
+      if (cut.tokIdx <= prevTok) continue;
+      newSegs.push({
+        start: prevTime,
+        end: cut.time,
+        text: tokens.slice(prevTok, cut.tokIdx).join(' '),
+      });
+      prevTok = cut.tokIdx;
+      prevTime = cut.time;
+    }
+    if (prevTok < tokens.length) {
+      newSegs.push({
+        start: prevTime,
+        end: seg.end,
+        text: tokens.slice(prevTok).join(' '),
+      });
+    }
+  }
+
+  return newSegs;
+}
+
 export function detectTakes(
   segments: TranscriptSegment[],
   options: TakeDetectorOptions = {},
@@ -166,6 +302,10 @@ export function detectTakes(
   const prefixWords = options.prefixWords ?? 4;
   const maxGap = options.maxGapSeconds ?? 30;
   const minConf = options.minConfidence ?? 0.6;
+
+  // Pre-process: split segments at internal restart points so whisper's
+  // long mixed-take segments become detectable.
+  segments = splitOnInternalRestarts(segments, prefixWords, maxGap);
 
   const tokenized = segments.map((s) => tokenize(s.text));
   const prefixes = tokenized.map((t) => prefixOf(t, prefixWords));
